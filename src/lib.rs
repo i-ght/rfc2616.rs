@@ -1,14 +1,20 @@
-use std::{
-    collections::BTreeMap, error::Error, fmt::Display, io::{Read, Write}, net::{SocketAddr, TcpStream, ToSocketAddrs}, num::ParseIntError, string::FromUtf8Error, time::Duration
-};
-use rfc3986::{Authority, URI};
 use native_tls::{HandshakeError, TlsConnector};
+use rfc3986::{Authority, URI};
+use std::{
+    collections::BTreeMap,
+    error::Error,
+    fmt::Display,
+    io::{Read, Write},
+    net::{SocketAddr, TcpStream, ToSocketAddrs},
+    num::ParseIntError,
+    string::FromUtf8Error,
+    time::Duration,
+};
 
 type HttpHeader = (String, String);
 
-
-trait Stream: Read + Write { }
-impl <T: Read + Write> Stream for T { }
+trait Stream: Read + Write {}
+impl<T: Read + Write> Stream for T {}
 
 impl core::fmt::Debug for dyn Stream {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -91,11 +97,10 @@ pub enum URIErrorKind {
     Authority,
 }
 
-
 #[derive(Debug)]
 pub enum TLSError {
     Connect(native_tls::Error),
-    HandShake(native_tls::HandshakeError<TcpStream>)
+    HandShake(native_tls::HandshakeError<TcpStream>),
 }
 
 #[derive(Debug)]
@@ -103,7 +108,7 @@ pub enum HttpConnectionError {
     URI(URIErrorKind),
     IO(std::io::Error),
     ProtocolViolation(ProtocolViolationKind),
-    TLS(TLSError)
+    TLS(TLSError),
 }
 
 impl Display for HttpConnectionError {
@@ -112,7 +117,7 @@ impl Display for HttpConnectionError {
     }
 }
 
-impl Error for HttpConnectionError {}
+impl Error for HttpConnectionError { }
 
 impl From<std::io::Error> for HttpConnectionError {
     fn from(value: std::io::Error) -> Self {
@@ -142,7 +147,7 @@ struct HttpConnection {
     tcp: Box<dyn Stream>,
     req: HttpRequest,
     authority: Authority,
-    components: BTreeMap<String, HttpResponseComponents>
+    components: BTreeMap<String, HttpResponseComponents>,
 }
 
 #[derive(Debug)]
@@ -230,7 +235,7 @@ fn tcp_read(buf: &mut [u8], tcp: &mut dyn Stream) -> Result<usize, HttpConnectio
     if read == 0 {
         return Err(HttpConnectionError::IO(std::io::Error::new(
             std::io::ErrorKind::UnexpectedEof,
-            "tcp stream read returned 0."
+            "tcp stream read returned 0.",
         )));
     }
     Ok(read)
@@ -269,7 +274,6 @@ fn recv_head(connection: HttpConnection) -> Result<HttpConnection, HttpConnectio
 
                 let head = String::from_utf8(head.to_vec())?;
 
-
                 let comp = HttpResponseComponents {
                     status: None,
                     headers: Vec::with_capacity(13),
@@ -280,7 +284,7 @@ fn recv_head(connection: HttpConnection) -> Result<HttpConnection, HttpConnectio
 
                 return Ok(HttpConnection {
                     tcp,
-/*                     heads, */
+                    /*                     heads, */
                     components,
                     ..connection
                 });
@@ -296,13 +300,9 @@ fn recv_head(connection: HttpConnection) -> Result<HttpConnection, HttpConnectio
 
 fn parse_head(connection: HttpConnection) -> Result<HttpConnection, HttpConnectionError> {
     let mut components = connection.components;
-    let (head, mut present) = components
-        .pop_last()
-        .unwrap();
+    let (head, mut present) = components.pop_last().unwrap();
 
-    let split: Vec<&str> = head
-        .split("\r\n")
-        .collect();
+    let split: Vec<&str> = head.split("\r\n").collect();
 
     /*
             generic-message = start-line
@@ -403,9 +403,7 @@ fn parse_head(connection: HttpConnection) -> Result<HttpConnection, HttpConnecti
 */
 fn recv_body(connection: HttpConnection) -> Result<HttpConnection, HttpConnectionError> {
     let mut components = connection.components;
-    let mut entry = components
-        .last_entry()
-        .unwrap();
+    let mut entry = components.last_entry().unwrap();
     let present = entry.get_mut();
     let content_len = match find_content_len_header(&present.headers) {
         Some(content_len) => content_len,
@@ -455,31 +453,25 @@ fn send_req(connection: HttpConnection) -> Result<HttpConnection, HttpConnection
 }
 
 fn connect(req: HttpRequest) -> Result<HttpConnection, HttpConnectionError> {
-    let authority = req.uri.authority
-        .clone()
-        .unwrap();
+    let authority = req.uri.authority.clone().unwrap();
 
     let host_port = format!("{}:{}", authority.host, authority.port);
 
-    let sock_addr: Vec<SocketAddr> = host_port
-        .to_socket_addrs()?
-        .collect();
+    let sock_addr: Vec<SocketAddr> = host_port.to_socket_addrs()?.collect();
 
     let addr = sock_addr[0];
 
     let tcp = TcpStream::connect_timeout(&addr, req.connect_timeout)?;
 
-
-    let tcp: Box<dyn Stream> =
-        match &req.uri.scheme[..] {
-            "https" => {
-                let negotiator = TlsConnector::new()?;
-                let tls_stream = negotiator.connect(&authority.host, tcp)?;
-                Box::new(tls_stream)
-            },
-            "http" => Box::new(tcp),
-            _ => unreachable!()
-        };
+    let tcp: Box<dyn Stream> = match &req.uri.scheme[..] {
+        "https" => {
+            let negotiator = TlsConnector::new()?;
+            let tls_stream = negotiator.connect(&authority.host, tcp)?;
+            Box::new(tls_stream)
+        }
+        "http" => Box::new(tcp),
+        _ => unreachable!(),
+    };
 
     Ok(HttpConnection {
         tcp,
@@ -487,12 +479,11 @@ fn connect(req: HttpRequest) -> Result<HttpConnection, HttpConnectionError> {
         /* heads: Vec::with_capacity(3), */
         authority,
         /* components: Vec::with_capacity(3), */
-        components: BTreeMap::new()
+        components: BTreeMap::new(),
     })
 }
 
 pub fn retrieve_response(req: HttpRequest) -> Result<HttpResponse, HttpConnectionError> {
-
     let connection = connect(req)?;
     let connection = send_req(connection)?;
 
@@ -502,14 +493,12 @@ pub fn retrieve_response(req: HttpRequest) -> Result<HttpResponse, HttpConnectio
     let connection = recv_body(connection)?;
 
     let mut components = connection.components;
-    let (_, present) =  components
-        .pop_last()
-        .unwrap();
+    let (_, present) = components.pop_last().unwrap();
 
     Ok(HttpResponse {
         status: present.status.unwrap(),
         headers: present.headers,
-        content: present.body
+        content: present.body,
     })
 }
 
@@ -519,7 +508,7 @@ mod tests {
 
     #[test]
     fn exec() -> Result<(), HttpConnectionError> {
-        let req = HttpRequest::new("GET", "http://httpbin.org/get?abc#123");
+        let req = HttpRequest::new("GET", "https://httpbin.org/get?abc#123");
         let response = retrieve_response(req)?;
         assert_eq!(response.status.code, 200);
         Ok(())
